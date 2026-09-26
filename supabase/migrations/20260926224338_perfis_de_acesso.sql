@@ -14,7 +14,7 @@ create table public.profiles (
 alter table public.profiles enable row level security;
 
 -- Papel do usuário logado (security definer evita recursão nas policies)
-create or replace function public.current_role()
+create or replace function public.current_app_role()
 returns public.app_role
 language sql
 stable
@@ -31,7 +31,7 @@ stable
 security definer
 set search_path = ''
 as $$
-  select coalesce(public.current_role() = any(roles), false)
+  select coalesce(public.current_app_role() = any(roles), false)
 $$;
 
 create policy "Usuário lê o próprio perfil"
