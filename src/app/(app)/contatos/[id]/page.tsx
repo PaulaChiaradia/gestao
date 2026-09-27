@@ -5,7 +5,7 @@ import { ChartCard } from "@/components/charts/stat-tile";
 import { requireArea } from "@/lib/auth";
 import { UF_NAMES, type UF } from "@/lib/brazil";
 import { formatBRL, formatDate, formatPhone } from "@/lib/format";
-import { PAID_STATUSES } from "@/lib/hotmart/sales";
+import { PAID_STATUSES, saleBRL } from "@/lib/hotmart/sales";
 import { labelOf, STAGES } from "@/lib/pipeline";
 import { canAccess } from "@/lib/roles";
 import { createClient } from "@/lib/supabase/server";
@@ -28,7 +28,7 @@ export default async function ContatoPage({ params }: PageProps<"/contatos/[id]"
     seesSales
       ? supabase
           .from("hotmart_sales")
-          .select("transaction, status, price, order_date, product:hotmart_products(name, short_name)")
+          .select("transaction, status, price, currency, gross_brl, order_date, product:hotmart_products(name, short_name)")
           .eq("contact_id", id)
           .order("order_date", { ascending: false })
       : Promise.resolve({ data: null }),
@@ -37,7 +37,7 @@ export default async function ContatoPage({ params }: PageProps<"/contatos/[id]"
 
   const paidTotal = (sales ?? [])
     .filter((s) => PAID_STATUSES.includes(s.status))
-    .reduce((sum, s) => sum + Number(s.price ?? 0), 0);
+    .reduce((sum, s) => sum + saleBRL(s), 0);
   const whatsapp = c.phone ? `https://wa.me/${c.phone}` : null;
 
   return (
@@ -115,7 +115,7 @@ export default async function ContatoPage({ params }: PageProps<"/contatos/[id]"
                         <span className="ml-2 text-xs text-muted">{formatDate(s.order_date)}</span>
                       </span>
                       <span className={`tabular-nums ${PAID_STATUSES.includes(s.status) ? "" : "text-muted line-through"}`}>
-                        {formatBRL(Number(s.price ?? 0))}
+                        {formatBRL(saleBRL(s))}
                       </span>
                     </li>
                   );

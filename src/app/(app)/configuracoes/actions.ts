@@ -81,3 +81,15 @@ export async function updateUser(fd: FormData) {
   }
   revalidatePath("/configuracoes");
 }
+
+export async function syncHotmartNow(): Promise<{ error?: string; message?: string }> {
+  await requireArea("configuracoes");
+  try {
+    const { syncRecent } = await import("@/lib/hotmart/sync");
+    const stats = await syncRecent(createAdminClient());
+    revalidatePath("/", "layout");
+    return { message: `${stats.sales} vendas dos últimos 45 dias revisadas.` };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Falha ao sincronizar." };
+  }
+}

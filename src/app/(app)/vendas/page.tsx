@@ -5,6 +5,7 @@ import { BrazilMap } from "@/components/charts/brazil-map";
 import { ColumnChart } from "@/components/charts/column-chart";
 import { ChartCard, StatTile } from "@/components/charts/stat-tile";
 import { PageHeader } from "@/components/page-header";
+import { ProductFilter } from "./product-filter";
 import { requireArea } from "@/lib/auth";
 import { UF_NAMES, type UF } from "@/lib/brazil";
 import { formatBRL, formatDate, formatInt, formatPct } from "@/lib/format";
@@ -19,6 +20,13 @@ const STATUS_LABEL: Record<string, string> = {
   PARTIALLY_REFUNDED: "Reembolso parcial",
   CHARGEBACK: "Chargeback",
   CANCELED: "Cancelada",
+  CANCELLED: "Cancelada",
+  OVERDUE: "Vencida",
+  PRINTED_BILLET: "Boleto gerado",
+  STARTED: "Iniciada",
+  UNDER_ANALISYS: "Em análise",
+  NO_FUNDS: "Sem saldo",
+  BLOCKED: "Bloqueada",
   WAITING_PAYMENT: "Aguardando pagamento",
   BILLET_PRINTED: "Boleto gerado",
   EXPIRED: "Expirada",
@@ -61,23 +69,7 @@ export default async function VendasPage({ searchParams }: PageProps<"/vendas">)
             </Link>
           ))}
         </div>
-        <div className="flex flex-wrap rounded-lg border border-border bg-surface p-0.5">
-          <Link
-            href={href({ produto: "" })}
-            className={`rounded-md px-3 py-1.5 text-sm ${!product ? "bg-foreground text-background" : "text-muted hover:text-foreground"}`}
-          >
-            Todos os produtos
-          </Link>
-          {s.products.map((p) => (
-            <Link
-              key={p.id}
-              href={href({ produto: p.id })}
-              className={`rounded-md px-3 py-1.5 text-sm ${product === p.id ? "bg-foreground text-background" : "text-muted hover:text-foreground"}`}
-            >
-              {p.name}
-            </Link>
-          ))}
-        </div>
+        <ProductFilter products={s.products} value={product} />
       </div>
 
       {!s.hasAnySale && (
@@ -91,8 +83,8 @@ export default async function VendasPage({ searchParams }: PageProps<"/vendas">)
       )}
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-        <StatTile label="Faturamento" value={formatBRL(s.revenue)} hint="Valor pago pelos compradores" />
-        <StatTile label="Receita líquida" value={formatBRL(s.net)} hint="Após taxas e comissões" />
+        <StatTile label="Faturamento" value={formatBRL(s.revenue)} hint="Valor das vendas, sem juros do parcelamento" />
+        <StatTile label="Receita líquida" value={formatBRL(s.net)} hint="Sua parte, após taxa Hotmart e coprodução" />
         <StatTile label="Vendas" value={formatInt(s.sales)} hint="Aprovadas e concluídas" />
         <StatTile label="Ticket médio" value={formatBRL(s.ticket)} />
         <StatTile label="Reembolsos" value={formatInt(s.refunds)} hint={`${formatPct(s.refundRate)} das vendas`} />
@@ -119,8 +111,8 @@ export default async function VendasPage({ searchParams }: PageProps<"/vendas">)
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <ChartCard title="Cidades com mais vendas" subtitle="Quando o comprador informa o endereço">
-          <BarList items={s.topCities} />
+        <ChartCard title="Regiões com mais vendas" subtitle="Pelo DDD do celular do comprador">
+          <BarList items={s.topRegions} />
         </ChartCard>
         <ChartCard title="Origem das vendas" subtitle="Parâmetro src dos links rastreados">
           <BarList items={s.byOrigin} />

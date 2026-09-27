@@ -2,7 +2,7 @@ import { BarChart3, Camera, Mail, Megaphone, MessageCircle, type LucideIcon } fr
 import { PageHeader } from "@/components/page-header";
 import { getCurrentUser } from "@/lib/auth";
 import { formatBRL, formatDate, formatInt } from "@/lib/format";
-import { PAID_STATUSES } from "@/lib/hotmart/sales";
+import { PAID_STATUSES, saleBRL } from "@/lib/hotmart/sales";
 import { canAccess } from "@/lib/roles";
 import { createClient } from "@/lib/supabase/server";
 
@@ -34,12 +34,12 @@ export default async function PainelPage() {
   const [{ data: integrations }, { data: monthSales }] = await Promise.all([
     supabase.from("integrations").select("key, name, status, last_event_at").order("key"),
     seesSales
-      ? supabase.from("hotmart_sales").select("price").in("status", PAID_STATUSES).gte("order_date", monthStart)
+      ? supabase.from("hotmart_sales").select("price, currency, gross_brl").in("status", PAID_STATUSES).gte("order_date", monthStart)
       : Promise.resolve({ data: null }),
   ]);
 
   const hotmartOn = integrations?.some((i) => i.key === "hotmart" && i.status === "conectado");
-  const monthRevenue = monthSales?.reduce((s, r) => s + Number(r.price ?? 0), 0) ?? 0;
+  const monthRevenue = monthSales?.reduce((s, r) => s + saleBRL(r), 0) ?? 0;
 
   const kpis = [
     {

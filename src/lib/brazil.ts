@@ -130,3 +130,29 @@ export const UF_TILES: Record<UF, [number, number]> = {
   SC: [2, 6],
   RS: [2, 7],
 };
+
+/** Região principal de cada DDD, para agrupar vendas quando o comprador não informa a cidade. */
+export const DDD_REGION: Record<string, string> = {
+  "11": "São Paulo e Grande SP", "12": "Vale do Paraíba e Litoral Norte (SP)", "13": "Baixada Santista (SP)",
+  "14": "Bauru e Marília (SP)", "15": "Sorocaba (SP)", "16": "Ribeirão Preto e Franca (SP)",
+  "17": "São José do Rio Preto (SP)", "18": "Presidente Prudente e Araçatuba (SP)", "19": "Campinas e Piracicaba (SP)",
+  "21": "Rio de Janeiro e Grande Rio", "22": "Campos e Região dos Lagos (RJ)", "24": "Petrópolis e Sul Fluminense (RJ)",
+  "27": "Vitória e Grande Vitória (ES)", "28": "Sul do Espírito Santo",
+  "31": "Belo Horizonte e região (MG)", "32": "Juiz de Fora (MG)", "33": "Governador Valadares (MG)",
+  "34": "Uberlândia e Triângulo (MG)", "35": "Sul de Minas (MG)", "37": "Divinópolis (MG)", "38": "Montes Claros e Norte de MG",
+  "41": "Curitiba e região (PR)", "42": "Ponta Grossa (PR)", "43": "Londrina (PR)", "44": "Maringá (PR)",
+  "45": "Cascavel e Foz do Iguaçu (PR)", "46": "Sudoeste do Paraná",
+  "47": "Joinville, Blumenau e Itajaí (SC)", "48": "Florianópolis e Sul de SC", "49": "Oeste de Santa Catarina",
+  "51": "Porto Alegre e região (RS)", "53": "Pelotas (RS)", "54": "Caxias do Sul e Serra (RS)", "55": "Santa Maria e Oeste do RS",
+  "61": "Brasília (DF)", "62": "Goiânia e região (GO)", "63": "Tocantins", "64": "Sul de Goiás",
+  "65": "Cuiabá (MT)", "66": "Interior de Mato Grosso", "67": "Mato Grosso do Sul", "68": "Acre", "69": "Rondônia",
+  "71": "Salvador e região (BA)", "73": "Sul da Bahia", "74": "Norte da Bahia", "75": "Feira de Santana (BA)", "77": "Oeste da Bahia",
+  "79": "Sergipe", "81": "Recife e região (PE)", "82": "Alagoas", "83": "Paraíba", "84": "Rio Grande do Norte",
+  "85": "Fortaleza e região (CE)", "86": "Teresina (PI)", "87": "Sertão de Pernambuco", "88": "Interior do Ceará",
+  "89": "Interior do Piauí", "91": "Belém e região (PA)", "92": "Manaus (AM)", "93": "Oeste do Pará", "94": "Sudeste do Pará",
+  "95": "Roraima", "96": "Amapá", "97": "Interior do Amazonas", "98": "São Luís (MA)", "99": "Interior do Maranhão",
+};
+
+export function dddOf(phone: string | null) {
+  return phone && phone.startsWith("55") && phone.length >= 12 ? phone.slice(2, 4) : null;
+}

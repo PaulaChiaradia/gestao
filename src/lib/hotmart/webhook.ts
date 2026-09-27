@@ -28,6 +28,7 @@ export type HotmartWebhook = {
       order_date?: number;
       approved_date?: number;
       price?: Money;
+      original_offer_price?: Money;
       offer?: { code?: string; coupon_code?: string };
       payment?: { type?: string; installments_number?: number };
       order_bump?: { is_order_bump?: boolean };
@@ -103,6 +104,9 @@ export async function processHotmartEvent(db: SupabaseClient, payload: HotmartWe
   });
 
   const producer = payload.data?.commissions?.find((c) => c.source === "PRODUCER");
+  const inBRL = (m?: { currency_value?: string }) => !m?.currency_value || m.currency_value === "BRL";
+  // Em reais: preço da oferta (sem juros). Outras moedas são convertidas na sincronização diária com a API.
+  const offer = purchase.original_offer_price ?? purchase.price;
   const isRefund = REFUND_STATUSES.has(purchase.status);
 
   const incoming: Record<string, unknown> = {
@@ -117,6 +121,8 @@ export async function processHotmartEvent(db: SupabaseClient, payload: HotmartWe
     price: purchase.price?.value ?? null,
     currency: purchase.price?.currency_value ?? null,
     producer_commission: producer?.value ?? null,
+    gross_brl: inBRL(offer) ? (offer?.value ?? null) : null,
+    commission_brl: producer && inBRL(producer) ? (producer.value ?? null) : null,
     payment_type: purchase.payment?.type ?? null,
     installments: purchase.payment?.installments_number ?? null,
     is_order_bump: purchase.order_bump?.is_order_bump ?? false,

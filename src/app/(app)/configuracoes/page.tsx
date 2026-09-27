@@ -6,9 +6,12 @@ import { formatDate } from "@/lib/format";
 import { isRole } from "@/lib/roles";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { CopyButton } from "../vendas/links/link-builder";
+import { SyncButton } from "./sync-button";
 import { InviteForm, UserList, type UserRow } from "./users";
 
 export const metadata = { title: "Configurações | Paula Chiaradia" };
+// "Sincronizar agora" consulta a API da Hotmart e pode levar alguns segundos
+export const maxDuration = 300;
 
 export default async function ConfiguracoesPage() {
   const me = await requireArea("configuracoes");
@@ -38,7 +41,7 @@ export default async function ConfiguracoesPage() {
   const [{ data: profiles }, { data: authList }, { data: integrations }, { data: lastEvents }] = await Promise.all([
     admin.from("profiles").select("id, full_name, email, role, active, avatar_url").order("created_at"),
     admin.auth.admin.listUsers({ perPage: 1000 }),
-    admin.from("integrations").select("key, name, status, last_event_at"),
+    admin.from("integrations").select("key, name, status, last_event_at, last_sync_at"),
     admin
       .from("webhook_events")
       .select("event, status, error, received_at")
@@ -84,20 +87,31 @@ export default async function ConfiguracoesPage() {
             <code className="min-w-0 flex-1 truncate text-xs">{webhookUrl}</code>
             <CopyButton text={webhookUrl} />
           </div>
-          <ul className="grid gap-2 sm:grid-cols-3">
+          <ul className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
             <li className="rounded-lg bg-background px-3 py-2">
               <p className="text-xs text-muted">Hottok configurado</p>
               <p className="font-medium">{hottokSet ? "Sim" : "Ainda não"}</p>
             </li>
             <li className="rounded-lg bg-background px-3 py-2">
-              <p className="text-xs text-muted">Situação</p>
-              <p className="font-medium">{hotmart?.status === "conectado" ? "Recebendo vendas" : "Aguardando primeiro evento"}</p>
+              <p className="text-xs text-muted">Avisos de venda (webhook)</p>
+              <p className="font-medium">{hotmart?.last_event_at ? "Recebendo" : "Aguardando o primeiro aviso"}</p>
             </li>
             <li className="rounded-lg bg-background px-3 py-2">
               <p className="text-xs text-muted">Último evento</p>
               <p className="font-medium">{formatDate(hotmart?.last_event_at ?? null)}</p>
             </li>
+            <li className="rounded-lg bg-background px-3 py-2">
+              <p className="text-xs text-muted">Última sincronização com a API</p>
+              <p className="font-medium">
+                {hotmart?.last_sync_at ? new Date(hotmart.last_sync_at).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" }) : "—"}
+              </p>
+            </li>
           </ul>
+          <SyncButton />
+          <p className="text-xs text-muted">
+            Além dos avisos em tempo real, o sistema revisa automaticamente as vendas dos últimos 45 dias todos os dias às
+            6h (reembolsos, cancelamentos e vendas em outras moedas).
+          </p>
           {!!lastEvents?.length && (
             <div>
               <p className="mb-1 text-xs text-muted">Últimos eventos recebidos</p>
