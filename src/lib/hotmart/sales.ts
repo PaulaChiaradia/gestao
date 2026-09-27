@@ -1,6 +1,6 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
-import { DDD_REGION, dddOf, UF_NAMES, type UF } from "@/lib/brazil";
+import { DDD_COORDS, DDD_REGION, dddOf, UF_NAMES, type UF } from "@/lib/brazil";
 
 export const PERIODS = {
   "7d": { label: "7 dias", days: 7 },
@@ -71,6 +71,10 @@ export type SalesSummary = {
   byState: Record<UF, { revenue: number; count: number }>;
   unknownState: number;
   topRegions: Bucket[];
+  /** Uma posição por região de DDD com vendas (cidade principal da região). */
+  mapPoints: (Bucket & { lat: number; lng: number })[];
+  /** Vendas sem DDD brasileiro (exterior ou sem celular). */
+  withoutLocation: number;
   byProduct: Bucket[];
   byOrigin: Bucket[];
   byPayment: Bucket[];
@@ -181,6 +185,10 @@ export async function getSalesSummary(period: PeriodKey, productId?: string): Pr
     byState,
     unknownState,
     topRegions,
+    mapPoints: group(withDdd, (r) => dddOf(r.buyer_phone)!, (d) => DDD_REGION[d] ?? `DDD ${d}`)
+      .filter((b) => DDD_COORDS[b.key])
+      .map((b) => ({ ...b, lat: DDD_COORDS[b.key][0], lng: DDD_COORDS[b.key][1] })),
+    withoutLocation: paid.length - withDdd.filter((r) => DDD_COORDS[dddOf(r.buyer_phone)!]).length,
     byProduct: group(paid, (r) => r.product_id ?? "", (k) => productName.get(k) ?? "Produto não identificado"),
     byOrigin: group(paid, (r) => r.src ?? "", (k) => k || "Sem origem registrada").slice(0, 10),
     byPayment: group(paid, (r) => r.payment_type ?? "", (k) => PAYMENT_LABELS[k] ?? (k || "Não informado")),

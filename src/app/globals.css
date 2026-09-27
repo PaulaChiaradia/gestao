@@ -65,3 +65,11 @@ body {
   text-decoration: underline;
   text-underline-offset: 2px;
 }
+
+/* Mapa de vendas: base do OpenStreetMap em tons neutros, para os dados se destacarem */
+.sales-map .leaflet-tile-pane {
+  filter: grayscale(1) sepia(0.12) brightness(1.06) contrast(0.88);
+}
+.sales-map .leaflet-container {
+  font-family: inherit;
+}

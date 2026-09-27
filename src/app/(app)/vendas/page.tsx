@@ -1,8 +1,9 @@
 import Link from "next/link";
-import { Info } from "lucide-react";
+import { BarChart3, Info, Map as MapIcon } from "lucide-react";
 import { BarList } from "@/components/charts/bar-list";
 import { BrazilMap } from "@/components/charts/brazil-map";
 import { ColumnChart } from "@/components/charts/column-chart";
+import { SalesMap } from "@/components/charts/sales-map";
 import { ChartCard, StatTile } from "@/components/charts/stat-tile";
 import { PageHeader } from "@/components/page-header";
 import { ProductFilter } from "./product-filter";
@@ -39,11 +40,18 @@ export default async function VendasPage({ searchParams }: PageProps<"/vendas">)
   const sp = await searchParams;
   const period = (typeof sp.periodo === "string" && sp.periodo in PERIODS ? sp.periodo : "30d") as PeriodKey;
   const product = typeof sp.produto === "string" ? sp.produto : undefined;
+  const view = sp.visao === "mapa" ? "mapa" : "indicadores";
 
   const s = await getSalesSummary(period, product);
-  const href = (p: Partial<{ periodo: string; produto: string }>) => {
-    const q = new URLSearchParams({ periodo: period, ...(product ? { produto: product } : {}), ...p });
+  const href = (p: Partial<{ periodo: string; produto: string; visao: string }>) => {
+    const q = new URLSearchParams({
+      periodo: period,
+      ...(product ? { produto: product } : {}),
+      ...(view === "mapa" ? { visao: "mapa" } : {}),
+      ...p,
+    });
     if (p.produto === "") q.delete("produto");
+    if (p.visao === "indicadores") q.delete("visao");
     return `/vendas?${q}`;
   };
 
@@ -58,6 +66,24 @@ export default async function VendasPage({ searchParams }: PageProps<"/vendas">)
 
       {/* Filtros: uma linha, acima de tudo o que eles afetam */}
       <div className="flex flex-wrap items-center gap-2">
+        <div className="flex rounded-lg border border-border bg-surface p-0.5" role="group" aria-label="Visão">
+          {(
+            [
+              ["indicadores", "Indicadores", BarChart3],
+              ["mapa", "Mapa", MapIcon],
+            ] as const
+          ).map(([value, label, Icon]) => (
+            <Link
+              key={value}
+              href={href({ visao: value })}
+              aria-current={view === value ? "page" : undefined}
+              className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm ${view === value ? "bg-accent text-accent-foreground" : "text-muted hover:text-foreground"}`}
+            >
+              <Icon className="size-4" />
+              {label}
+            </Link>
+          ))}
+        </div>
         <div className="flex rounded-lg border border-border bg-surface p-0.5">
           {(Object.keys(PERIODS) as PeriodKey[]).map((k) => (
             <Link
@@ -90,90 +116,103 @@ export default async function VendasPage({ searchParams }: PageProps<"/vendas">)
         <StatTile label="Reembolsos" value={formatInt(s.refunds)} hint={`${formatPct(s.refundRate)} das vendas`} />
       </section>
 
-      <ChartCard title="Faturamento" subtitle={`Por ${s.series.granularity}, vendas aprovadas`}>
-        <ColumnChart points={s.series.points} />
-      </ChartCard>
-
-      <div className="grid gap-6 lg:grid-cols-2">
-        <ChartCard
-          title="Vendas por estado"
-          subtitle={
-            s.unknownState
-              ? `${formatInt(s.unknownState)} ${s.unknownState === 1 ? "venda" : "vendas"} sem estado identificado`
-              : "Pelo endereço do comprador ou DDD do telefone"
-          }
-        >
-          <BrazilMap data={s.byState} />
+      {view === "mapa" ? (
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
+          <ChartCard title="Onde as vendas acontecem" subtitle="Faturamento por região, no período e produto selecionados">
+            <SalesMap points={s.mapPoints} withoutLocation={s.withoutLocation} />
+          </ChartCard>
+          <ChartCard title="Regiões com mais vendas" subtitle="Pelo DDD do celular do comprador">
+            <BarList items={s.topRegions} />
+          </ChartCard>
+        </div>
+      ) : (
+        <>
+        <ChartCard title="Faturamento" subtitle={`Por ${s.series.granularity}, vendas aprovadas`}>
+          <ColumnChart points={s.series.points} />
         </ChartCard>
-        <ChartCard title="Ranking de estados">
-          <BarList items={states.slice(0, 10)} />
-        </ChartCard>
-      </div>
-
-      <div className="grid gap-6 lg:grid-cols-2">
-        <ChartCard title="Regiões com mais vendas" subtitle="Pelo DDD do celular do comprador">
-          <BarList items={s.topRegions} />
-        </ChartCard>
-        <ChartCard title="Origem das vendas" subtitle="Parâmetro src dos links rastreados">
-          <BarList items={s.byOrigin} />
-        </ChartCard>
-      </div>
-
-      <div className="grid gap-6 lg:grid-cols-2">
-        <ChartCard title="Produtos">
-          <BarList items={s.byProduct} />
-        </ChartCard>
-        <ChartCard title="Forma de pagamento">
-          <BarList items={s.byPayment} />
-        </ChartCard>
-      </div>
-
-      <ChartCard title="Últimas transações">
-        {s.recent.length ? (
-          <div className="-mx-5 overflow-x-auto sm:-mx-6">
-            <table className="w-full min-w-[640px] text-sm">
-              <thead className="text-left text-xs text-muted">
-                <tr className="border-b border-border">
-                  <th className="px-5 py-2 font-normal sm:px-6">Data</th>
-                  <th className="px-3 py-2 font-normal">Comprador</th>
-                  <th className="px-3 py-2 font-normal">Produto</th>
-                  <th className="px-3 py-2 font-normal">Local</th>
-                  <th className="px-3 py-2 font-normal">Situação</th>
-                  <th className="px-5 py-2 text-right font-normal sm:px-6">Valor</th>
-                </tr>
-              </thead>
-              <tbody>
-                {s.recent.map((r) => (
-                  <tr key={r.transaction} className="border-b border-border last:border-0">
-                    <td className="px-5 py-2.5 tabular-nums sm:px-6">{formatDate(r.order_date)}</td>
-                    <td className="px-3 py-2.5">{r.buyer_name ?? "—"}</td>
-                    <td className="px-3 py-2.5">{r.productName}</td>
-                    <td className="px-3 py-2.5 text-muted">
-                      {[r.city, r.state].filter(Boolean).join(" · ") || "—"}
-                    </td>
-                    <td className="px-3 py-2.5">
-                      <span
-                        className={`rounded-full px-2 py-0.5 text-xs ${
-                          PAID_STATUSES.includes(r.status)
-                            ? "bg-accent/10 text-accent"
-                            : REFUND_STATUSES.includes(r.status)
-                              ? "bg-danger/10 text-danger"
-                              : "bg-sand text-muted"
-                        }`}
-                      >
-                        {STATUS_LABEL[r.status] ?? r.status}
-                      </span>
-                    </td>
-                    <td className="px-5 py-2.5 text-right tabular-nums sm:px-6">{formatBRL(Number(r.price ?? 0))}</td>
+  
+        <div className="grid gap-6 lg:grid-cols-2">
+          <ChartCard
+            title="Vendas por estado"
+            subtitle={
+              s.unknownState
+                ? `${formatInt(s.unknownState)} ${s.unknownState === 1 ? "venda" : "vendas"} sem estado identificado`
+                : "Pelo endereço do comprador ou DDD do telefone"
+            }
+          >
+            <BrazilMap data={s.byState} />
+          </ChartCard>
+          <ChartCard title="Ranking de estados">
+            <BarList items={states.slice(0, 10)} />
+          </ChartCard>
+        </div>
+  
+        <div className="grid gap-6 lg:grid-cols-2">
+          <ChartCard title="Regiões com mais vendas" subtitle="Pelo DDD do celular do comprador">
+            <BarList items={s.topRegions} />
+          </ChartCard>
+          <ChartCard title="Origem das vendas" subtitle="Parâmetro src dos links rastreados">
+            <BarList items={s.byOrigin} />
+          </ChartCard>
+        </div>
+  
+        <div className="grid gap-6 lg:grid-cols-2">
+          <ChartCard title="Produtos">
+            <BarList items={s.byProduct} />
+          </ChartCard>
+          <ChartCard title="Forma de pagamento">
+            <BarList items={s.byPayment} />
+          </ChartCard>
+        </div>
+  
+        <ChartCard title="Últimas transações">
+          {s.recent.length ? (
+            <div className="-mx-5 overflow-x-auto sm:-mx-6">
+              <table className="w-full min-w-[640px] text-sm">
+                <thead className="text-left text-xs text-muted">
+                  <tr className="border-b border-border">
+                    <th className="px-5 py-2 font-normal sm:px-6">Data</th>
+                    <th className="px-3 py-2 font-normal">Comprador</th>
+                    <th className="px-3 py-2 font-normal">Produto</th>
+                    <th className="px-3 py-2 font-normal">Local</th>
+                    <th className="px-3 py-2 font-normal">Situação</th>
+                    <th className="px-5 py-2 text-right font-normal sm:px-6">Valor</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <p className="py-6 text-center text-sm text-muted">Nenhuma transação no período.</p>
-        )}
-      </ChartCard>
+                </thead>
+                <tbody>
+                  {s.recent.map((r) => (
+                    <tr key={r.transaction} className="border-b border-border last:border-0">
+                      <td className="px-5 py-2.5 tabular-nums sm:px-6">{formatDate(r.order_date)}</td>
+                      <td className="px-3 py-2.5">{r.buyer_name ?? "—"}</td>
+                      <td className="px-3 py-2.5">{r.productName}</td>
+                      <td className="px-3 py-2.5 text-muted">
+                        {[r.city, r.state].filter(Boolean).join(" · ") || "—"}
+                      </td>
+                      <td className="px-3 py-2.5">
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-xs ${
+                            PAID_STATUSES.includes(r.status)
+                              ? "bg-accent/10 text-accent"
+                              : REFUND_STATUSES.includes(r.status)
+                                ? "bg-danger/10 text-danger"
+                                : "bg-sand text-muted"
+                          }`}
+                        >
+                          {STATUS_LABEL[r.status] ?? r.status}
+                        </span>
+                      </td>
+                      <td className="px-5 py-2.5 text-right tabular-nums sm:px-6">{formatBRL(Number(r.price ?? 0))}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="py-6 text-center text-sm text-muted">Nenhuma transação no período.</p>
+          )}
+        </ChartCard>
+        </>
+      )}
     </div>
   );
 }
