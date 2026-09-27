@@ -12,8 +12,29 @@ export const metadata = { title: "Configurações | Paula Chiaradia" };
 
 export default async function ConfiguracoesPage() {
   const me = await requireArea("configuracoes");
-  const admin = createAdminClient();
 
+  // Sem a chave secreta no servidor não há como listar usuários: explica em vez de quebrar a página
+  const probe = process.env.SUPABASE_SECRET_KEY ? await createAdminClient().auth.admin.listUsers({ perPage: 1 }) : null;
+  if (!probe || probe.error) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title="Configurações" description="Usuários, perfis de acesso e integrações." />
+        <div className="rounded-2xl border border-danger/30 bg-danger/5 p-6 text-sm">
+          <p className="font-medium text-danger">
+            {probe ? "A chave secreta do Supabase configurada no servidor é inválida." : "A chave secreta do Supabase não está configurada no servidor."}
+          </p>
+          <p className="mt-2 text-muted">
+            No Vercel, abra o projeto → Settings → Environment Variables e confira a variável{" "}
+            <code className="rounded bg-sand px-1">SUPABASE_SECRET_KEY</code>: o nome deve estar exatamente assim, o valor
+            deve ser a <em>Secret key</em> do Supabase (começa com <code>sb_secret_</code>) e o ambiente{" "}
+            <strong>Production</strong> precisa estar marcado. Depois, publique de novo (Deployments → ⋯ → Redeploy).
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  const admin = createAdminClient();
   const [{ data: profiles }, { data: authList }, { data: integrations }, { data: lastEvents }] = await Promise.all([
     admin.from("profiles").select("id, full_name, email, role, active").order("created_at"),
     admin.auth.admin.listUsers({ perPage: 1000 }),
