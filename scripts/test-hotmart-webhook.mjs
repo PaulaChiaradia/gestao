@@ -79,8 +79,37 @@ for (const [name, body, token, expected] of cases) {
   console.log(`${ok ? "OK  " : "FALHA"} ${name}: ${res.status} ${text}`);
 }
 
+const send = (body, token = hottok) =>
+  fetch(`${base}/api/webhooks/hotmart`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-HOTMART-HOTTOK": token },
+    body: JSON.stringify(body),
+  }).then(async (r) => ({ status: r.status, json: await r.json() }));
+
+// Vários eventos ao mesmo tempo de um produto que ainda não existe (como no "Enviar teste" da Hotmart)
+const newProduct = { id: 990002, ucode: "teste-ucode-2", name: "TESTE Produto Simultâneo" };
+const parallel = await Promise.all(
+  [1, 2, 3, 4, 5].map((n) => {
+    const body = event(`TESTE-p${n}`, "PURCHASE_APPROVED", "APPROVED", `TESTE-HPP${n}`, t0 + n, { buyer: buyerRJ, price: 10 });
+    body.data.product = newProduct;
+    return send(body);
+  }),
+);
+const parallelOk = parallel.every((r) => r.status === 200 && r.json.status === "processado");
+console.log(`${parallelOk ? "OK  " : "FALHA"} 5 eventos simultâneos de produto novo: ${parallel.map((r) => r.json.status ?? r.json.error).join(", ")}`);
+if (!parallelOk) failures++;
+
+// Evento de teste da Hotmart: confirma a conexão, mas não grava venda
+const hotmartTest = event("TESTE-oficial", "PURCHASE_APPROVED", "APPROVED", "HP16015479281022", t0, { buyer: buyerRJ, price: 1500 });
+hotmartTest.data.product = { id: 0, ucode: "fb056612", name: "Produto test postback2" };
+const testRes = await send(hotmartTest);
+const [testSale] = await (await rest("hotmart_sales?transaction=eq.HP16015479281022&select=transaction")).json();
+const testOk = testRes.json.status === "ignorado" && !testSale;
+console.log(`${testOk ? "OK  " : "FALHA"} evento de teste da Hotmart ignorado (${testRes.json.reason})`);
+if (!testOk) failures++;
+
 const sales = await (
-  await rest("hotmart_sales?transaction=like.TESTE-*&select=transaction,status,state,city,geo_source,src,sck,refunded_at,producer_commission&order=transaction")
+  await rest("hotmart_sales?transaction=like.TESTE-HP_&select=transaction,status,state,city,geo_source,src,sck,refunded_at,producer_commission&order=transaction")
 ).json();
 console.table(sales);
 
@@ -103,7 +132,7 @@ expect(contacts.length === 3, `3 contatos criados (${contacts.length})`);
 await rest("hotmart_sales?transaction=like.TESTE-*", { method: "DELETE" });
 await rest("contacts?email=like.teste-*", { method: "DELETE" });
 await rest("webhook_events?external_id=like.TESTE-*", { method: "DELETE" });
-await rest(`hotmart_products?hotmart_id=eq.${product.id}`, { method: "DELETE" });
+await rest(`hotmart_products?hotmart_id=in.(${product.id},${newProduct.id})`, { method: "DELETE" });
 await rest("integrations?key=eq.hotmart", { method: "PATCH", body: JSON.stringify(integrationBefore) });
 console.log(failures ? `\n${failures} falha(s)` : "\nTodos os testes passaram. Dados de teste removidos.");
 process.exit(failures ? 1 : 0);

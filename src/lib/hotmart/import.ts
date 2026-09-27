@@ -11,7 +11,7 @@ const ALL_STATUSES = [
 
 type HistoryItem = {
   product: { id: number; name: string };
-  buyer?: { name?: string; email?: string };
+  buyer?: { name?: string; email?: string; ucode?: string };
   purchase: {
     transaction: string;
     status: string;
@@ -20,21 +20,25 @@ type HistoryItem = {
     is_subscription?: boolean;
     commission_as?: string;
     price?: { value?: number; currency_code?: string };
-    payment?: { type?: string; installments_number?: number };
-    offer?: { code?: string };
-    tracking?: { source?: string; source_sck?: string };
+    payment?: { type?: string; method?: string; installments_number?: number };
+    offer?: { code?: string; payment_mode?: string };
+    tracking?: { source?: string; source_sck?: string; external_code?: string };
+    warranty_expire_date?: number;
+    recurrency_number?: number;
+    hotmart_fee?: { total?: number; percentage?: number };
   };
 };
 type UsersItem = {
   transaction: string;
-  users: { role: string; user: { cellphone?: string; phone?: string; address?: Record<string, string> } }[];
+  users: { role: string; user: { cellphone?: string; phone?: string; locale?: string; address?: Record<string, string> } }[];
 };
 type CommissionItem = {
   transaction: string;
   exchange_rate_currency_payout?: number;
-  commissions: { source: string; commission: { value: number; currency_code?: string } }[];
+  commissions: { source: string; user?: { name?: string }; commission: { value: number; currency_code?: string } }[];
 };
-type PriceItem = { transaction: string; real_conversion_rate?: number; base?: { value?: number; currency_code?: string } };
+type Money = { value?: number; currency_code?: string };
+type PriceItem = { transaction: string; real_conversion_rate?: number; base?: Money; total?: Money; fee?: Money };
 type ApiProduct = { id: number; name: string; format?: string; status?: string };
 
 const toISO = (ms?: number) => (ms ? new Date(ms).toISOString() : null);
@@ -115,19 +119,32 @@ export async function importWindow(
     const rate = priceInfo?.real_conversion_rate || 1;
     const base = priceInfo?.base?.value ?? (p.price?.currency_code === "BRL" ? p.price?.value : undefined);
     const grossBrl = base != null ? Math.round((base / rate) * 100) / 100 : null;
+    const inBrl = (v?: number) => (v != null ? Math.round((v / rate) * 100) / 100 : null);
+    const totalPaidBrl = inBrl(priceInfo?.total?.value ?? p.price?.value);
+    const installmentFeeBrl =
+      priceInfo?.fee?.value != null
+        ? inBrl(priceInfo.fee.value)
+        : totalPaidBrl != null && grossBrl != null
+          ? Math.max(0, Math.round((totalPaidBrl - grossBrl) * 100) / 100)
+          : null;
+
+    // Comissões vêm na moeda de repasse: converte para reais
     const comm = commissionOf.get(p.transaction);
+    const payoutRate = comm?.exchange_rate_currency_payout;
+    const commissionToBrl = (c: { value: number; currency_code?: string }) =>
+      (c.currency_code ?? "BRL") === "BRL"
+        ? c.value
+        : payoutRate
+          ? Math.round((c.value / payoutRate / rate) * 100) / 100
+          : null;
     const mine = comm?.commissions.find((c) => c.source === (p.commission_as ?? "PRODUCER"));
-    let commissionBrl: number | null = null;
-    if (mine) {
-      const cur = mine.commission.currency_code ?? "BRL";
-      const payoutRate = comm?.exchange_rate_currency_payout;
-      commissionBrl =
-        cur === "BRL"
-          ? mine.commission.value
-          : payoutRate
-            ? Math.round((mine.commission.value / payoutRate / rate) * 100) / 100
-            : null;
-    }
+    const commissionBrl = mine ? commissionToBrl(mine.commission) : null;
+    const split = comm?.commissions.map((c) => ({
+      source: c.source,
+      name: c.user?.name?.trim() ?? null,
+      value_brl: commissionToBrl(c.commission),
+      mine: c === mine,
+    }));
     return {
       transaction: p.transaction,
       product_id: productMap.get(it.product.id) ?? null,
@@ -140,6 +157,19 @@ export async function importWindow(
       gross_brl: grossBrl,
       commission_brl: commissionBrl,
       payment_type: p.payment?.type ?? null,
+      payment_method: p.payment?.method ?? null,
+      offer_payment_mode: p.offer?.payment_mode ?? null,
+      recurrency_number: p.recurrency_number ?? null,
+      warranty_expire_date: toISO(p.warranty_expire_date),
+      buyer_ucode: it.buyer?.ucode ?? null,
+      buyer_locale: buyer?.locale ?? null,
+      external_code: p.tracking?.external_code && p.tracking.external_code !== "undefined" ? p.tracking.external_code : null,
+      conversion_rate: rate,
+      total_paid_brl: totalPaidBrl,
+      installment_fee_brl: installmentFeeBrl,
+      hotmart_fee_brl: inBrl(p.hotmart_fee?.total),
+      hotmart_fee_percentage: p.hotmart_fee?.percentage ?? null,
+      commissions: split ?? null,
       installments: p.payment?.installments_number ?? null,
       is_subscription: !!p.is_subscription,
       buyer_name: it.buyer?.name?.trim() ?? null,

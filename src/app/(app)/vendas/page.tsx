@@ -7,33 +7,14 @@ import { SalesMap } from "@/components/charts/sales-map";
 import { ChartCard, StatTile } from "@/components/charts/stat-tile";
 import { PageHeader } from "@/components/page-header";
 import { ProductFilter } from "./product-filter";
+import { SalesTable } from "./sale-detail";
 import { requireArea } from "@/lib/auth";
 import { UF_NAMES, type UF } from "@/lib/brazil";
-import { formatBRL, formatDate, formatInt, formatPct } from "@/lib/format";
-import { getSalesSummary, PAID_STATUSES, PERIODS, REFUND_STATUSES, type PeriodKey } from "@/lib/hotmart/sales";
+import { formatBRL, formatInt, formatPct } from "@/lib/format";
+import { getSalesSummary, PERIODS, type PeriodKey } from "@/lib/hotmart/sales";
 
 export const metadata = { title: "Vendas | Paula Chiaradia" };
 
-const STATUS_LABEL: Record<string, string> = {
-  APPROVED: "Aprovada",
-  COMPLETE: "Concluída",
-  REFUNDED: "Reembolsada",
-  PARTIALLY_REFUNDED: "Reembolso parcial",
-  CHARGEBACK: "Chargeback",
-  CANCELED: "Cancelada",
-  CANCELLED: "Cancelada",
-  OVERDUE: "Vencida",
-  PRINTED_BILLET: "Boleto gerado",
-  STARTED: "Iniciada",
-  UNDER_ANALISYS: "Em análise",
-  NO_FUNDS: "Sem saldo",
-  BLOCKED: "Bloqueada",
-  WAITING_PAYMENT: "Aguardando pagamento",
-  BILLET_PRINTED: "Boleto gerado",
-  EXPIRED: "Expirada",
-  DELAYED: "Atrasada",
-  PROTESTED: "Em disputa",
-};
 
 export default async function VendasPage({ searchParams }: PageProps<"/vendas">) {
   await requireArea("vendas");
@@ -166,50 +147,7 @@ export default async function VendasPage({ searchParams }: PageProps<"/vendas">)
         </div>
   
         <ChartCard title="Últimas transações">
-          {s.recent.length ? (
-            <div className="-mx-5 overflow-x-auto sm:-mx-6">
-              <table className="w-full min-w-[640px] text-sm">
-                <thead className="text-left text-xs text-muted">
-                  <tr className="border-b border-border">
-                    <th className="px-5 py-2 font-normal sm:px-6">Data</th>
-                    <th className="px-3 py-2 font-normal">Comprador</th>
-                    <th className="px-3 py-2 font-normal">Produto</th>
-                    <th className="px-3 py-2 font-normal">Local</th>
-                    <th className="px-3 py-2 font-normal">Situação</th>
-                    <th className="px-5 py-2 text-right font-normal sm:px-6">Valor</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {s.recent.map((r) => (
-                    <tr key={r.transaction} className="border-b border-border last:border-0">
-                      <td className="px-5 py-2.5 tabular-nums sm:px-6">{formatDate(r.order_date)}</td>
-                      <td className="px-3 py-2.5">{r.buyer_name ?? "—"}</td>
-                      <td className="px-3 py-2.5">{r.productName}</td>
-                      <td className="px-3 py-2.5 text-muted">
-                        {[r.city, r.state].filter(Boolean).join(" · ") || "—"}
-                      </td>
-                      <td className="px-3 py-2.5">
-                        <span
-                          className={`rounded-full px-2 py-0.5 text-xs ${
-                            PAID_STATUSES.includes(r.status)
-                              ? "bg-accent/10 text-accent"
-                              : REFUND_STATUSES.includes(r.status)
-                                ? "bg-danger/10 text-danger"
-                                : "bg-sand text-muted"
-                          }`}
-                        >
-                          {STATUS_LABEL[r.status] ?? r.status}
-                        </span>
-                      </td>
-                      <td className="px-5 py-2.5 text-right tabular-nums sm:px-6">{formatBRL(Number(r.price ?? 0))}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <p className="py-6 text-center text-sm text-muted">Nenhuma transação no período.</p>
-          )}
+          <SalesTable rows={s.recent} />
         </ChartCard>
         </>
       )}

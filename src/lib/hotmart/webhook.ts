@@ -55,11 +55,24 @@ function titleCase(s?: string | null) {
 
 type Result = { status: "processado" | "ignorado"; reason?: string };
 
+const HOTMART_TEST_TRANSACTION = "HP16015479281022";
+
+export function isHotmartTest(payload: HotmartWebhook) {
+  const product = payload.data?.product;
+  return (
+    payload.data?.purchase?.transaction === HOTMART_TEST_TRANSACTION ||
+    product?.id === 0 ||
+    /test postback/i.test(product?.name ?? "")
+  );
+}
+
 /** Grava/atualiza a venda e o contato a partir de um evento de compra. */
 export async function processHotmartEvent(db: SupabaseClient, payload: HotmartWebhook): Promise<Result> {
   const purchase = payload.data?.purchase;
   const transaction = purchase?.transaction;
   if (!transaction || !purchase?.status) return { status: "ignorado", reason: "evento sem transação" };
+  // Botão "Enviar teste" da Hotmart: confirma a conexão, mas não vira venda nem contato
+  if (isHotmartTest(payload)) return { status: "ignorado", reason: "evento de teste da Hotmart" };
 
   const eventAt = toDate(payload.creation_date) ?? new Date().toISOString();
 
@@ -176,13 +189,16 @@ async function upsertProduct(db: SupabaseClient, product?: { id?: number; ucode?
       return data.id as string;
     }
   }
-  const { data, error } = await db
+  // Eventos simultâneos do mesmo produto novo: upsert evita erro de duplicidade
+  const { error } = await db
     .from("hotmart_products")
-    .insert({ hotmart_id: product.id, ucode: product.ucode, name: product.name ?? `Produto ${product.id}` })
-    .select("id")
-    .single();
+    .upsert(
+      { hotmart_id: product.id, ucode: product.ucode, name: product.name ?? `Produto ${product.id}` },
+      { onConflict: "hotmart_id", ignoreDuplicates: true },
+    );
   if (error) throw new Error(`hotmart_products: ${error.message}`);
-  return data.id as string;
+  const { data } = await db.from("hotmart_products").select("id").eq("hotmart_id", product.id).single();
+  return (data?.id as string) ?? null;
 }
 
 type ContactInput = {

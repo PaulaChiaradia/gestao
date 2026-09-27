@@ -192,7 +192,7 @@ export async function getSalesSummary(period: PeriodKey, productId?: string): Pr
     byProduct: group(paid, (r) => r.product_id ?? "", (k) => productName.get(k) ?? "Produto não identificado"),
     byOrigin: group(paid, (r) => r.src ?? "", (k) => k || "Sem origem registrada").slice(0, 10),
     byPayment: group(paid, (r) => r.payment_type ?? "", (k) => PAYMENT_LABELS[k] ?? (k || "Não informado")),
-    recent: rows.slice(0, 15).map((r) => ({ ...r, productName: productName.get(r.product_id ?? "") ?? "—" })),
+    recent: rows.slice(0, 25).map((r) => ({ ...r, productName: productName.get(r.product_id ?? "") ?? "—" })),
     hasAnySale: rows.length > 0,
   };
 }
