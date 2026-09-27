@@ -36,7 +36,7 @@ export default async function ConfiguracoesPage() {
 
   const admin = createAdminClient();
   const [{ data: profiles }, { data: authList }, { data: integrations }, { data: lastEvents }] = await Promise.all([
-    admin.from("profiles").select("id, full_name, email, role, active").order("created_at"),
+    admin.from("profiles").select("id, full_name, email, role, active, avatar_url").order("created_at"),
     admin.auth.admin.listUsers({ perPage: 1000 }),
     admin.from("integrations").select("key, name, status, last_event_at"),
     admin
@@ -54,6 +54,7 @@ export default async function ConfiguracoesPage() {
     email: p.email,
     role: isRole(p.role) ? p.role : "visualizador",
     active: p.active,
+    avatar_url: p.avatar_url,
     last_sign_in_at: lastSignIn.get(p.id) ?? null,
   }));
 

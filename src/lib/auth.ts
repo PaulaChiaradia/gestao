@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { canAccess, isRole, type Area, type Role } from "@/lib/roles";
 
-export type CurrentUser = { id: string; email: string; name: string; role: Role };
+export type CurrentUser = { id: string; email: string; name: string; role: Role; avatarUrl: string | null };
 
 export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
   const supabase = await createClient();
@@ -13,7 +13,7 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("full_name, role, active")
+    .select("full_name, role, active, avatar_url")
     .eq("id", data.user.id)
     .maybeSingle();
 
@@ -25,6 +25,7 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
     email,
     name: profile?.full_name || email.split("@")[0],
     role: isRole(profile?.role) ? profile.role : "visualizador",
+    avatarUrl: profile?.avatar_url ?? null,
   };
 });
 

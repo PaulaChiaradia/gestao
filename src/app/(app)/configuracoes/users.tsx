@@ -2,6 +2,7 @@
 
 import { useActionState } from "react";
 import { KeyRound, Loader2, UserPlus } from "lucide-react";
+import { Avatar } from "@/components/avatar";
 import { CopyButton } from "../vendas/links/link-builder";
 import { ROLE_LABELS, ROLES, type Role } from "@/lib/roles";
 import { inviteUser, newAccessLink, updateUser, type UserActionState } from "./actions";
@@ -12,6 +13,7 @@ export type UserRow = {
   email: string | null;
   role: Role;
   active: boolean;
+  avatar_url: string | null;
   last_sign_in_at: string | null;
 };
 
@@ -83,6 +85,7 @@ function UserItem({ user, isMe }: { user: UserRow; isMe: boolean }) {
   return (
     <li className="py-3">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <Avatar name={user.full_name ?? user.email ?? "?"} url={user.avatar_url} size={40} />
         <div className="min-w-0 flex-1">
           <p className="font-medium">
             {user.full_name ?? user.email}
