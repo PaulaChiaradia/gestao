@@ -4,6 +4,7 @@ import {
   Contact,
   Camera,
   KanbanSquare,
+  Link2,
   LayoutDashboard,
   Megaphone,
   MessagesSquare,
@@ -20,6 +21,7 @@ export const NAV_SECTIONS: { title: string; items: NavItem[] }[] = [
     items: [
       { area: "painel", href: "/", label: "Painel geral", icon: LayoutDashboard },
       { area: "vendas", href: "/vendas", label: "Vendas Hotmart", icon: BarChart3 },
+      { area: "links", href: "/vendas/links", label: "Links rastreados", icon: Link2 },
       { area: "anuncios", href: "/anuncios", label: "Anúncios Meta", icon: Megaphone },
       { area: "instagram", href: "/instagram", label: "Instagram", icon: Camera },
     ],

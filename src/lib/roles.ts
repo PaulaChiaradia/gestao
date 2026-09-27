@@ -12,6 +12,7 @@ export const ROLE_LABELS: Record<Role, string> = {
 export type Area =
   | "painel"
   | "vendas"
+  | "links"
   | "anuncios"
   | "instagram"
   | "atendimento"
@@ -23,6 +24,7 @@ export type Area =
 const ACCESS: Record<Area, Role[]> = {
   painel: ["admin", "gestor", "marketing", "atendimento", "visualizador"],
   vendas: ["admin", "gestor", "visualizador"],
+  links: ["admin", "gestor", "marketing", "visualizador"],
   anuncios: ["admin", "gestor", "marketing", "visualizador"],
   instagram: ["admin", "gestor", "marketing", "visualizador"],
   atendimento: ["admin", "gestor", "atendimento"],

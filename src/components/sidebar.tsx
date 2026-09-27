@@ -17,6 +17,12 @@ export function Sidebar({ role }: { role: Role }) {
     items: s.items.filter((i) => canAccess(role, i.area)),
   })).filter((s) => s.items.length > 0);
 
+  // Item ativo = o de href mais específico que casa com a rota atual
+  const activeHref = sections
+    .flatMap((s) => s.items.map((i) => i.href))
+    .filter((h) => (h === "/" ? pathname === "/" : pathname === h || pathname.startsWith(`${h}/`)))
+    .sort((a, b) => b.length - a.length)[0];
+
   return (
     <>
       <button
@@ -51,7 +57,7 @@ export function Sidebar({ role }: { role: Role }) {
               </p>
               <ul className="space-y-0.5">
                 {section.items.map(({ href, label, icon: Icon }) => {
-                  const active = href === "/" ? pathname === "/" : pathname.startsWith(href);
+                  const active = href === activeHref;
                   return (
                     <li key={href}>
                       <Link

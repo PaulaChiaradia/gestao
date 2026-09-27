@@ -11,6 +11,16 @@
   --accent: #5f7359; /* verde sálvia */
   --accent-foreground: #ffffff;
   --danger: #b4432f;
+
+  /* Gráficos — verde validado (croma e contraste) para séries; rampa ordinal de 5 passos para o mapa */
+  --series-1: #528a4a;
+  --seq-1: #8dbb88;
+  --seq-2: #6ea468;
+  --seq-3: #528a4a;
+  --seq-4: #3d6e37;
+  --seq-5: #2a5226;
+  --seq-empty: #f1ede6;
+  --grid: #ece7df;
 }
 
 @theme inline {
@@ -30,4 +40,28 @@
 body {
   background: var(--background);
   color: var(--foreground);
+}
+
+/* Páginas públicas (privacidade, termos) */
+.legal h2 {
+  margin-top: 2rem;
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+.legal ul,
+.legal ol {
+  padding-left: 1.25rem;
+  display: grid;
+  gap: 0.375rem;
+}
+.legal ul {
+  list-style: disc;
+}
+.legal ol {
+  list-style: decimal;
+}
+.legal a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
