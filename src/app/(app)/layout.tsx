@@ -7,7 +7,7 @@ import { signOut } from "../login/actions";
 
 export default async function AppLayout({ children }: LayoutProps<"/">) {
   const user = await getCurrentUser();
-  if (!user) redirect("/login");
+  if (!user) redirect("/login?erro=acesso");
 
   const initials = user.name
     .split(/\s+/)

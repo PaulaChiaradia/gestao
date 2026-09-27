@@ -20,7 +20,8 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
       <section className="w-full max-w-sm rounded-2xl border border-white/60 bg-white/80 p-7 shadow-xl shadow-black/10 backdrop-blur-md sm:p-8">
         <h1 className="font-display text-2xl tracking-wide">Acesso ao sistema</h1>
         <p className="mb-6 mt-1 text-sm text-muted">Gestão, atendimento e indicadores.</p>
-        <LoginForm next={typeof next === "string" ? next : "/"} linkError={erro === "link"} />
+        <LoginForm next={typeof next === "string" ? next : "/"} linkError={erro === "link"}
+          accessError={erro === "acesso"} />
       </section>
     </main>
   );

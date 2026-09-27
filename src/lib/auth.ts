@@ -13,9 +13,11 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("full_name, role")
+    .select("full_name, role, active")
     .eq("id", data.user.id)
     .maybeSingle();
+
+  if (profile && !profile.active) return null; // desativado em Configurações
 
   const email = data.user.email ?? "";
   return {
@@ -29,7 +31,7 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
 /** Garante que o usuário logado tem acesso à área; caso contrário volta ao painel. */
 export async function requireArea(area: Area) {
   const user = await getCurrentUser();
-  if (!user) redirect("/login");
+  if (!user) redirect("/login?erro=acesso");
   if (!canAccess(user.role, area)) redirect("/");
   return user;
 }

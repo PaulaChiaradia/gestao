@@ -7,7 +7,15 @@ import { requestPasswordReset, signIn } from "./actions";
 const inputClass =
   "w-full rounded-lg border border-border bg-surface px-3.5 py-2.5 text-[15px] outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/20";
 
-export function LoginForm({ next, linkError }: { next: string; linkError?: boolean }) {
+export function LoginForm({
+  next,
+  linkError,
+  accessError,
+}: {
+  next: string;
+  linkError?: boolean;
+  accessError?: boolean;
+}) {
   const [mode, setMode] = useState<"login" | "reset">("login");
   const [loginState, loginAction, loggingIn] = useActionState(signIn, undefined);
   const [resetState, resetAction, resetting] = useActionState(requestPasswordReset, undefined);
@@ -46,6 +54,9 @@ export function LoginForm({ next, linkError }: { next: string; linkError?: boole
         <input name="password" type="password" autoComplete="current-password" required className={inputClass} />
       </Field>
       {linkError && !loginState && <Alert tone="error">O link expirou ou é inválido. Solicite um novo.</Alert>}
+      {accessError && !loginState && (
+        <Alert tone="error">Seu acesso está desativado ou a sessão expirou. Entre novamente ou fale com a administração.</Alert>
+      )}
       {loginState?.error && <Alert tone="error">{loginState.error}</Alert>}
       <SubmitButton pending={loggingIn}>Entrar</SubmitButton>
     </form>
