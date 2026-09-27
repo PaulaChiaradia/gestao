@@ -17,7 +17,7 @@ export function ColumnChart({ points, height = 220 }: { points: Point[]; height?
   const [active, setActive] = useState<number | null>(null);
   const max = niceMax(Math.max(...points.map((p) => p.revenue), 0));
   const ticks = [max, max / 2, 0];
-  const labelEvery = Math.ceil(points.length / 8);
+  const labelEvery = Math.ceil(points.length / 12);
   const hovered = active !== null ? points[active] : null;
 
   return (
