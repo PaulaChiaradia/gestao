@@ -18,6 +18,7 @@ export type Area =
   | "atendimento"
   | "pipeline"
   | "contatos"
+  | "tarefas"
   | "bot"
   | "configuracoes";
 
@@ -30,6 +31,7 @@ const ACCESS: Record<Area, Role[]> = {
   atendimento: ["admin", "gestor", "atendimento"],
   pipeline: ["admin", "gestor", "atendimento"],
   contatos: ["admin", "gestor", "atendimento"],
+  tarefas: ["admin", "gestor", "marketing", "atendimento", "visualizador"],
   bot: ["admin", "gestor"],
   configuracoes: ["admin"],
 };

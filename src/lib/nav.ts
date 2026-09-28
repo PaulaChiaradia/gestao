@@ -6,6 +6,7 @@ import {
   KanbanSquare,
   Link2,
   LayoutDashboard,
+  ListTodo,
   Megaphone,
   MessagesSquare,
   Settings,
@@ -33,6 +34,10 @@ export const NAV_SECTIONS: { title: string; items: NavItem[] }[] = [
       { area: "pipeline", href: "/pipeline", label: "Palestras e treinamentos", icon: KanbanSquare },
       { area: "contatos", href: "/contatos", label: "Contatos", icon: Contact },
     ],
+  },
+  {
+    title: "Equipe",
+    items: [{ area: "tarefas", href: "/tarefas", label: "Tarefas", icon: ListTodo }],
   },
   {
     title: "Sistema",
