@@ -47,7 +47,7 @@ const HEADER_ALIASES: Record<string, string[]> = {
 const norm = (s: string) =>
   s
     .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
+    .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .trim();
 

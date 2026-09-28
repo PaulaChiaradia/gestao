@@ -96,14 +96,42 @@ export async function deleteTask(id: string): Promise<{ error?: string }> {
   return {};
 }
 
-export async function addComment(taskId: string, body: string): Promise<{ error?: string }> {
+export type UploadedFile = { path: string; name: string; size: number; mime: string | null };
+
+/** Comentário com anexos (os arquivos já foram enviados pelo navegador para task-files/<tarefa>/...). */
+export async function addComment(taskId: string, body: string, files: UploadedFile[] = []): Promise<{ error?: string }> {
   const user = await requireArea("tarefas");
   const text = body.trim();
-  if (!text) return { error: "Escreva o comentário." };
+  if (!text && !files.length) return { error: "Escreva um comentário ou anexe um arquivo." };
   if (text.length > 4000) return { error: "Comentário muito longo." };
+  if (files.length > 20) return { error: "Envie no máximo 20 arquivos por vez." };
+  if (files.some((f) => !f.path.startsWith(`${taskId}/`) || f.path.includes(".."))) return { error: "Arquivo inválido." };
+
   const supabase = await createClient();
-  const { error } = await supabase.from("task_comments").insert({ task_id: taskId, body: text, author_id: user.id });
-  if (error) return { error: "Não foi possível comentar." };
+  let commentId: string | null = null;
+  if (text) {
+    const { data, error } = await supabase
+      .from("task_comments")
+      .insert({ task_id: taskId, body: text, author_id: user.id })
+      .select("id")
+      .single();
+    if (error || !data) return { error: "Não foi possível comentar." };
+    commentId = data.id;
+  }
+  if (files.length) {
+    const { error } = await supabase.from("task_attachments").insert(
+      files.map((f) => ({
+        task_id: taskId,
+        comment_id: commentId,
+        uploader_id: user.id,
+        name: f.name.slice(0, 255),
+        path: f.path,
+        size: Math.max(0, Math.round(f.size)),
+        mime: f.mime,
+      })),
+    );
+    if (error) return { error: "O comentário foi salvo, mas os anexos não puderam ser registrados." };
+  }
   revalidatePath("/tarefas");
   return {};
 }
@@ -115,22 +143,65 @@ export async function deleteComment(id: string) {
   revalidatePath("/tarefas");
 }
 
+export async function deleteAttachment(id: string): Promise<{ error?: string }> {
+  await requireArea("tarefas");
+  const supabase = await createClient();
+  const { data: file } = await supabase.from("task_attachments").select("path").eq("id", id).maybeSingle();
+  if (!file) return { error: "Anexo não encontrado." };
+  const { data: removed, error } = await supabase.from("task_attachments").delete().eq("id", id).select("id");
+  if (error || !removed?.length) return { error: "Só quem enviou o arquivo, o administrador ou o gestor podem removê-lo." };
+  await supabase.storage.from("task-files").remove([file.path]);
+  revalidatePath("/tarefas");
+  return {};
+}
+
+export type Attachment = {
+  id: string;
+  comment_id: string | null;
+  uploader_id: string | null;
+  name: string;
+  path: string;
+  size: number;
+  mime: string | null;
+  created_at: string;
+};
+export type Activity = {
+  id: number;
+  action: string;
+  from_value: string | null;
+  to_value: string | null;
+  actor_id: string | null;
+  created_at: string;
+};
 export type TaskThread = {
   comments: { id: string; body: string; author_id: string | null; created_at: string }[];
-  activity: { id: number; action: string; from_value: string | null; to_value: string | null; actor_id: string | null; created_at: string }[];
+  attachments: Attachment[];
 };
 
 export async function getTaskThread(taskId: string): Promise<TaskThread> {
   await requireArea("tarefas");
   const supabase = await createClient();
-  const [{ data: comments }, { data: activity }] = await Promise.all([
+  const [{ data: comments }, { data: attachments }] = await Promise.all([
     supabase.from("task_comments").select("id, body, author_id, created_at").eq("task_id", taskId).order("created_at"),
     supabase
-      .from("task_activity")
-      .select("id, action, from_value, to_value, actor_id, created_at")
+      .from("task_attachments")
+      .select("id, comment_id, uploader_id, name, path, size, mime, created_at")
       .eq("task_id", taskId)
-      .order("created_at", { ascending: false })
-      .limit(30),
+      .order("created_at", { ascending: false }),
   ]);
-  return { comments: comments ?? [], activity: activity ?? [] };
+  return { comments: comments ?? [], attachments: (attachments ?? []) as Attachment[] };
+}
+
+/** Histórico em páginas (mais recentes primeiro). */
+export async function getTaskActivity(taskId: string, offset = 0, limit = 30): Promise<{ items: Activity[]; total: number }> {
+  await requireArea("tarefas");
+  const supabase = await createClient();
+  const { data, count } = await supabase
+    .from("task_activity")
+    .select("id, action, from_value, to_value, actor_id, created_at", { count: "exact" })
+    .eq("task_id", taskId)
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: false })
+    .range(offset, offset + limit - 1);
+  return { items: (data ?? []) as Activity[], total: count ?? 0 };
 }

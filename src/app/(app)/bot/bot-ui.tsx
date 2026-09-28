@@ -181,7 +181,9 @@ function KnowledgeDialog({ item, onClose }: { item: Knowledge | null; onClose: (
   const ref = useRef<HTMLDialogElement>(null);
   const [state, action, pending] = useActionState(saveKnowledge, undefined);
   const [deleting, startDelete] = useTransition();
-  useEffect(() => ref.current?.showModal(), []);
+  useEffect(() => {
+    ref.current?.showModal();
+  }, []);
   useEffect(() => {
     if (state?.ok) onClose();
   }, [state, onClose]);
@@ -264,7 +266,9 @@ export function TestChat({ ready }: { ready: boolean }) {
   const [pending, startTransition] = useTransition();
   const endRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => endRef.current?.scrollIntoView({ block: "nearest" }), [messages, pending]);
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ block: "nearest" });
+  }, [messages, pending]);
 
   function send() {
     const text = input.trim();

@@ -33,7 +33,7 @@ export type UF = keyof typeof UF_NAMES;
 const strip = (s: string) =>
   s
     .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
+    .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .trim();
 

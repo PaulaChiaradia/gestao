@@ -1,25 +1,30 @@
 "use client";
 
-import { useActionState, useCallback, useEffect, useRef, useState, useTransition } from "react";
-import { Loader2, Plus, Send, Trash2, X } from "lucide-react";
+import { useActionState, useEffect, useRef, useState, useTransition } from "react";
+import { Loader2, Plus, Trash2, X } from "lucide-react";
 import { Avatar } from "@/components/avatar";
 import {
   CATEGORIES,
+  dueRelative,
+  dueState,
   formatDue,
   PRIORITIES,
-  statusLabel,
+  priorityOf,
   TASK_COLUMNS,
   type ChecklistItem,
   type Task,
+  type TaskStatus,
   type TeamMember,
 } from "@/lib/tasks";
-import { addComment, deleteComment, deleteTask, getTaskThread, saveTask, toggleChecklistItem, type TaskThread } from "./actions";
+import { deleteTask, getTaskActivity, moveTask, saveTask, toggleChecklistItem } from "./actions";
+import { CommentsTab } from "./task-comments";
+import { HistoryTab } from "./task-history";
 
-const field =
+export const field =
   "w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-accent focus:ring-2 focus:ring-accent/20";
 
-const when = (iso: string) =>
-  new Date(iso).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", dateStyle: "short", timeStyle: "short" });
+export type Me = { id: string; canDeleteAll: boolean };
+type Tab = "detalhes" | "comentarios" | "historico";
 
 export function TaskDialog({
   task,
@@ -29,40 +34,211 @@ export function TaskDialog({
 }: {
   task: Task | null;
   team: TeamMember[];
-  me: { id: string; canDeleteAll: boolean };
+  me: Me;
   onClose: () => void;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
-  const [state, action, pending] = useActionState(saveTask, undefined);
-  const [checklist, setChecklist] = useState<ChecklistItem[]>(task?.checklist ?? []);
-  const [newItem, setNewItem] = useState("");
-  const [thread, setThread] = useState<TaskThread | null>(null);
-  const [deleting, startDelete] = useTransition();
-  const [, startToggle] = useTransition();
-  const [deleteError, setDeleteError] = useState<string>();
+  useEffect(() => {
+    ref.current?.showModal();
+  }, []);
+
+  return (
+    <dialog
+      ref={ref}
+      onClose={onClose}
+      className="m-auto w-[min(880px,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-border bg-surface p-0 text-foreground shadow-2xl backdrop:bg-black/30"
+    >
+      {task ? (
+        <TaskView task={task} team={team} me={me} onClose={onClose} />
+      ) : (
+        <>
+          <div className="flex items-center justify-between border-b border-border px-6 py-3.5">
+            <div>
+              <p className="font-medium">Nova tarefa</p>
+              <p className="text-xs text-muted">Entra automaticamente em “Em planejamento”</p>
+            </div>
+            <button type="button" onClick={onClose} aria-label="Fechar" className="rounded-md p-1.5 text-muted hover:bg-sand hover:text-foreground">
+              <X className="size-5" />
+            </button>
+          </div>
+          <div className="max-h-[80dvh] overflow-y-auto p-6">
+            <TaskForm task={null} team={team} me={me} onDone={onClose} onCancel={onClose} />
+          </div>
+        </>
+      )}
+    </dialog>
+  );
+}
+
+const metaLabel = "text-[10px] font-semibold uppercase tracking-[0.12em] text-muted";
+
+/** Tarefa existente: cabeçalho fixo com o essencial + três abas de altura fixa. */
+function TaskView({ task, team, me, onClose }: { task: Task; team: TeamMember[]; me: Me; onClose: () => void }) {
+  const [tab, setTab] = useState<Tab>("detalhes");
+  const [historyTotal, setHistoryTotal] = useState<number | null>(null);
+  const [, startMove] = useTransition();
   const member = new Map(team.map((m) => [m.id, m]));
-  const nameOf = (id: string | null) => (id ? (member.get(id)?.name ?? "Usuário removido") : "Sistema");
+  const assignee = task.assignee_id ? member.get(task.assignee_id) : undefined;
+  const creator = task.created_by ? member.get(task.created_by) : undefined;
+  const due = dueState(task);
+  const relative = dueRelative(task);
+  const prio = priorityOf(task.priority);
 
-  useEffect(() => ref.current?.showModal(), []);
+  // Total do histórico para o contador da aba (atualiza quando a tarefa muda em tempo real)
   useEffect(() => {
-    if (state?.ok && !task) onClose(); // nova tarefa: fecha e o cartão aparece em "Em planejamento"
-  }, [state, task, onClose]);
-
-  const taskId = task?.id;
-  const loadThread = useCallback(async () => {
-    if (taskId) setThread(await getTaskThread(taskId));
-  }, [taskId]);
-  // Recarrega comentários e histórico ao abrir e quando o quadro atualiza (tempo real)
-  const commentCount = task?.comments;
-  const status = task?.status;
-  useEffect(() => {
-    if (!taskId) return;
     let active = true;
-    getTaskThread(taskId).then((t) => active && setThread(t));
+    getTaskActivity(task.id, 0, 1).then((r) => active && setHistoryTotal(r.total));
     return () => {
       active = false;
     };
-  }, [taskId, commentCount, status]);
+  }, [task.id, task.status, task.assignee_id, task.due_date, task.attachments, task.title]);
+
+  const tabs: { value: Tab; label: string; count?: number | null }[] = [
+    { value: "detalhes", label: "Detalhes" },
+    { value: "comentarios", label: "Comentários e anexos", count: task.comments + task.attachments },
+    { value: "historico", label: "Histórico", count: historyTotal },
+  ];
+
+  return (
+    <div className="flex h-[min(820px,90dvh)] flex-col">
+      <header className="border-b border-border px-6 pt-5">
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">
+              {task.category ?? "Tarefa"}
+              {creator && (
+                <span className="ml-2 font-normal normal-case tracking-normal">
+                  · criada por {creator.name.split(" ")[0]} em {new Date(task.created_at).toLocaleDateString("pt-BR")}
+                </span>
+              )}
+            </p>
+            <h2 className={`mt-1 font-display text-2xl leading-tight tracking-wide ${task.status === "cancelado" ? "line-through" : ""}`}>
+              {task.title}
+            </h2>
+          </div>
+          <button type="button" onClick={onClose} aria-label="Fechar" className="-mr-2 rounded-md p-1.5 text-muted hover:bg-sand hover:text-foreground">
+            <X className="size-5" />
+          </button>
+        </div>
+
+        <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-3 text-sm sm:grid-cols-4">
+          <div>
+            <dt className={metaLabel}>Coluna</dt>
+            <dd className="mt-1">
+              <select
+                aria-label="Mover para a coluna"
+                value={task.status}
+                onChange={(e) => startMove(() => moveTask(task.id, e.target.value as TaskStatus))}
+                className="-ml-1 rounded-md border border-transparent bg-transparent px-1 py-0.5 font-medium hover:border-border focus:border-accent"
+              >
+                {TASK_COLUMNS.map((c) => (
+                  <option key={c.value} value={c.value}>
+                    {c.label}
+                  </option>
+                ))}
+              </select>
+            </dd>
+          </div>
+          <div className="min-w-0">
+            <dt className={metaLabel}>Responsável</dt>
+            <dd className="mt-1 flex items-center gap-2">
+              {assignee ? (
+                <>
+                  <Avatar name={assignee.name} url={assignee.avatarUrl} size={22} />
+                  <span className="truncate">{assignee.name}</span>
+                </>
+              ) : (
+                <span className="text-muted">Sem responsável</span>
+              )}
+            </dd>
+          </div>
+          <div>
+            <dt className={metaLabel}>Vencimento</dt>
+            <dd
+              className={`mt-1 ${due === "atrasada" ? "font-medium text-danger" : due === "hoje" || due === "proxima" ? "text-[#8a5a00]" : ""}`}
+            >
+              {task.due_date ? (
+                <>
+                  <span className="tabular-nums">{formatDue(task.due_date)}</span>
+                  {relative && <span className="block text-xs">{relative}</span>}
+                </>
+              ) : (
+                <span className="text-muted">Sem prazo</span>
+              )}
+            </dd>
+          </div>
+          <div>
+            <dt className={metaLabel}>Prioridade</dt>
+            <dd className="mt-1">
+              <span className={`rounded-full px-2 py-0.5 text-xs ${prio.tone}`}>{prio.label}</span>
+            </dd>
+          </div>
+        </dl>
+
+        <nav className="-mb-px mt-4 flex gap-1 overflow-x-auto" role="tablist">
+          {tabs.map((t) => (
+            <button
+              key={t.value}
+              type="button"
+              role="tab"
+              aria-selected={tab === t.value}
+              onClick={() => setTab(t.value)}
+              className={`flex shrink-0 items-center gap-2 border-b-2 px-3 py-2.5 text-sm transition ${
+                tab === t.value ? "border-foreground font-medium text-foreground" : "border-transparent text-muted hover:text-foreground"
+              }`}
+            >
+              {t.label}
+              {t.count != null && t.count > 0 && (
+                <span className="rounded-full bg-sand px-1.5 py-0.5 text-[11px] font-normal tabular-nums text-muted">{t.count}</span>
+              )}
+            </button>
+          ))}
+        </nav>
+      </header>
+
+      {/* Só o conteúdo da aba rola: a janela não cresce com o volume de comentários ou histórico */}
+      <div className="min-h-0 flex-1 bg-background/40">
+        {tab === "detalhes" && (
+          <div className="h-full overflow-y-auto p-6">
+            <TaskForm task={task} team={team} me={me} onDone={() => {}} onCancel={onClose} onDeleted={onClose} />
+          </div>
+        )}
+        {tab === "comentarios" && <CommentsTab task={task} team={team} me={me} />}
+        {tab === "historico" && <HistoryTab task={task} team={team} />}
+      </div>
+    </div>
+  );
+}
+
+/** Formulário de criação/edição (nome, responsável, vencimento, prioridade, categoria, descrição, subtarefas). */
+function TaskForm({
+  task,
+  team,
+  me,
+  onDone,
+  onCancel,
+  onDeleted,
+}: {
+  task: Task | null;
+  team: TeamMember[];
+  me: Me;
+  onDone: () => void;
+  onCancel: () => void;
+  onDeleted?: () => void;
+}) {
+  const [state, action, pending] = useActionState(saveTask, undefined);
+  const [checklist, setChecklist] = useState<ChecklistItem[]>(task?.checklist ?? []);
+  const [newItem, setNewItem] = useState("");
+  const [deleting, startDelete] = useTransition();
+  const [, startToggle] = useTransition();
+  const [error, setError] = useState<string>();
+  const activeTeam = team.filter((m) => m.active !== false || m.id === task?.assignee_id);
+  const canDelete = task && (me.canDeleteAll || task.created_by === me.id);
+  const doneCount = checklist.filter((i) => i.done).length;
+
+  useEffect(() => {
+    if (state?.ok && !task) onDone();
+  }, [state, task, onDone]);
 
   function addItem() {
     const text = newItem.trim();
@@ -71,305 +247,171 @@ export function TaskDialog({
     setNewItem("");
   }
 
-  const canDelete = task && (me.canDeleteAll || task.created_by === me.id);
-  const activeTeam = team.filter((m) => m.active !== false || m.id === task?.assignee_id);
-
   return (
-    <dialog
-      ref={ref}
-      onClose={onClose}
-      className="m-auto w-[min(900px,calc(100vw-2rem))] rounded-2xl border border-border bg-surface p-0 text-foreground backdrop:bg-black/30"
-    >
-      <div className="max-h-[88dvh] overflow-y-auto">
-        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-surface px-6 py-3">
-          <span className="text-sm text-muted">
-            {task ? `Tarefa · ${statusLabel(task.status)}` : "Nova tarefa · entra em “Em planejamento”"}
-          </span>
-          <button type="button" onClick={onClose} aria-label="Fechar" className="rounded-md p-1 hover:bg-sand">
-            <X className="size-5" />
-          </button>
-        </div>
+    <form action={action} className="space-y-4">
+      {task && <input type="hidden" name="id" value={task.id} />}
+      <input type="hidden" name="checklist" value={JSON.stringify(checklist)} />
 
-        <div className={`grid gap-6 p-6 ${task ? "lg:grid-cols-[minmax(0,1fr)_300px]" : ""}`}>
-          <form action={action} className="space-y-4">
-            {task && <input type="hidden" name="id" value={task.id} />}
-            <input type="hidden" name="checklist" value={JSON.stringify(checklist)} />
+      <label className="block text-sm">
+        <span className="mb-1 block text-muted">Nome da tarefa *</span>
+        <input name="title" required autoFocus={!task} defaultValue={task?.title} maxLength={200} className={`${field} text-base`} />
+      </label>
 
-            <label className="block text-sm">
-              <span className="mb-1 block text-muted">Nome da tarefa *</span>
-              <input name="title" required autoFocus={!task} defaultValue={task?.title} maxLength={200} className={`${field} text-base font-medium`} />
-            </label>
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              <label className="block text-sm">
-                <span className="mb-1 block text-muted">Responsável</span>
-                <select name="assignee_id" defaultValue={task ? (task.assignee_id ?? "") : me.id} className={field}>
-                  <option value="">Sem responsável</option>
-                  {activeTeam.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.name}
-                      {m.id === me.id ? " (eu)" : ""}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="block text-sm">
-                <span className="mb-1 block text-muted">Prazo</span>
-                <input name="due_date" type="date" defaultValue={task?.due_date ?? ""} className={field} />
-              </label>
-              <label className="block text-sm">
-                <span className="mb-1 block text-muted">Prioridade</span>
-                <select name="priority" defaultValue={task?.priority ?? "media"} className={field}>
-                  {PRIORITIES.map((p) => (
-                    <option key={p.value} value={p.value}>
-                      {p.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="block text-sm">
-                <span className="mb-1 block text-muted">Categoria</span>
-                <select name="category" defaultValue={task?.category ?? ""} className={field}>
-                  <option value="">—</option>
-                  {CATEGORIES.map((c) => (
-                    <option key={c}>{c}</option>
-                  ))}
-                </select>
-              </label>
-              {task && (
-                <label className="block text-sm sm:col-span-2">
-                  <span className="mb-1 block text-muted">Coluna</span>
-                  <select name="status" defaultValue={task.status} className={field}>
-                    {TASK_COLUMNS.map((c) => (
-                      <option key={c.value} value={c.value}>
-                        {c.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              )}
-            </div>
-
-            <label className="block text-sm">
-              <span className="mb-1 block text-muted">Descrição</span>
-              <textarea name="description" rows={4} defaultValue={task?.description ?? ""} placeholder="O que precisa ser feito, links, detalhes…" className={field} />
-            </label>
-
-            {/* Subtarefas */}
-            <div className="text-sm">
-              <span className="mb-1 block text-muted">
-                Subtarefas{checklist.length > 0 && ` · ${checklist.filter((i) => i.done).length}/${checklist.length}`}
-              </span>
-              <ul className="space-y-1">
-                {checklist.map((item, i) => (
-                  <li key={i} className="group flex items-center gap-2 rounded-lg px-1 py-1 hover:bg-background">
-                    <input
-                      type="checkbox"
-                      checked={item.done}
-                      onChange={() => {
-                        setChecklist((c) => c.map((x, j) => (j === i ? { ...x, done: !x.done } : x)));
-                        // tarefa existente: grava na hora (e desfaz na tela se falhar)
-                        if (task)
-                          startToggle(async () => {
-                            const res = await toggleChecklistItem(task.id, i);
-                            if (res?.error) {
-                              setChecklist((c) => c.map((x, j) => (j === i ? { ...x, done: !x.done } : x)));
-                              setDeleteError(res.error);
-                            }
-                          });
-                      }}
-                      className="size-4 accent-[var(--accent)]"
-                      aria-label={`Concluir: ${item.text}`}
-                    />
-                    <span className={`flex-1 ${item.done ? "text-muted line-through" : ""}`}>{item.text}</span>
-                    <button
-                      type="button"
-                      onClick={() => setChecklist((c) => c.filter((_, j) => j !== i))}
-                      aria-label="Remover subtarefa"
-                      className="rounded p-1 text-muted opacity-0 hover:text-danger group-hover:opacity-100"
-                    >
-                      <X className="size-3.5" />
-                    </button>
-                  </li>
-                ))}
-              </ul>
-              <div className="mt-1 flex gap-2">
-                <input
-                  value={newItem}
-                  onChange={(e) => setNewItem(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      addItem();
-                    }
-                  }}
-                  placeholder="Adicionar subtarefa e apertar Enter"
-                  className={field}
-                />
-                <button type="button" onClick={addItem} aria-label="Adicionar subtarefa" className="rounded-lg border border-border px-2.5 hover:bg-sand">
-                  <Plus className="size-4" />
-                </button>
-              </div>
-            </div>
-
-            {!task && (
-              <label className="block text-sm">
-                <span className="mb-1 block text-muted">Comentário</span>
-                <textarea name="comment" rows={2} placeholder="Observação inicial para a equipe (opcional)" className={field} />
-              </label>
-            )}
-
-            {state?.error && <p className="rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger">{state.error}</p>}
-            {deleteError && <p className="rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger">{deleteError}</p>}
-            {state?.ok && task && <p className="text-sm text-accent">Alterações salvas.</p>}
-
-            <div className="flex items-center justify-between gap-3 pt-1">
-              {canDelete ? (
-                <button
-                  type="button"
-                  disabled={deleting}
-                  onClick={() => {
-                    if (!confirm("Excluir esta tarefa? Comentários e histórico também serão apagados.")) return;
-                    startDelete(async () => {
-                      const res = await deleteTask(task!.id);
-                      if (res.error) setDeleteError(res.error);
-                      else onClose();
-                    });
-                  }}
-                  className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm text-danger hover:bg-danger/10"
-                >
-                  <Trash2 className="size-4" />
-                  Excluir
-                </button>
-              ) : (
-                <span />
-              )}
-              <div className="flex gap-2">
-                <button type="button" onClick={onClose} className="rounded-lg px-4 py-2 text-sm hover:bg-sand">
-                  {task ? "Fechar" : "Cancelar"}
-                </button>
-                <button
-                  disabled={pending}
-                  className="flex items-center gap-2 rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background hover:bg-foreground/85 disabled:opacity-60"
-                >
-                  {pending && <Loader2 className="size-4 animate-spin" />}
-                  {task ? "Salvar alterações" : "Criar tarefa"}
-                </button>
-              </div>
-            </div>
-          </form>
-
-          {task && (
-            <aside className="space-y-5 lg:border-l lg:border-border lg:pl-6">
-              <Comments taskId={task.id} thread={thread} team={member} me={me.id} onChange={loadThread} />
-              <div>
-                <h3 className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted">Histórico</h3>
-                <ul className="space-y-1.5 text-xs text-muted">
-                  {thread?.activity.map((a) => (
-                    <li key={a.id}>
-                      <span className="text-foreground">{nameOf(a.actor_id)}</span>{" "}
-                      {a.action === "criou" && "criou a tarefa"}
-                      {a.action === "moveu" && `moveu de ${statusLabel(a.from_value ?? "")} para ${statusLabel(a.to_value ?? "")}`}
-                      {a.action === "atribuiu" && `definiu o responsável: ${a.to_value ? nameOf(a.to_value) : "ninguém"}`}
-                      {a.action === "prazo" && `mudou o prazo para ${formatDue(a.to_value) ?? "sem prazo"}`}
-                      <span className="block">{when(a.created_at)}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </aside>
-          )}
-        </div>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <label className="block text-sm">
+          <span className="mb-1 block text-muted">Responsável</span>
+          <select name="assignee_id" defaultValue={task ? (task.assignee_id ?? "") : me.id} className={field}>
+            <option value="">Sem responsável</option>
+            {activeTeam.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.name}
+                {m.id === me.id ? " (eu)" : ""}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="block text-sm">
+          <span className="mb-1 block text-muted">Vencimento (data para concluir)</span>
+          <input name="due_date" type="date" defaultValue={task?.due_date ?? ""} className={field} />
+        </label>
+        <label className="block text-sm">
+          <span className="mb-1 block text-muted">Prioridade</span>
+          <select name="priority" defaultValue={task?.priority ?? "media"} className={field}>
+            {PRIORITIES.map((p) => (
+              <option key={p.value} value={p.value}>
+                {p.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="block text-sm">
+          <span className="mb-1 block text-muted">Categoria</span>
+          <select name="category" defaultValue={task?.category ?? ""} className={field}>
+            <option value="">—</option>
+            {CATEGORIES.map((c) => (
+              <option key={c}>{c}</option>
+            ))}
+          </select>
+        </label>
       </div>
-    </dialog>
-  );
-}
 
-function Comments({
-  taskId,
-  thread,
-  team,
-  me,
-  onChange,
-}: {
-  taskId: string;
-  thread: TaskThread | null;
-  team: Map<string, TeamMember>;
-  me: string;
-  onChange: () => void;
-}) {
-  const [text, setText] = useState("");
-  const [error, setError] = useState<string>();
-  const [pending, start] = useTransition();
-
-  function send() {
-    if (!text.trim()) return;
-    start(async () => {
-      const res = await addComment(taskId, text);
-      if (res.error) setError(res.error);
-      else {
-        setText("");
-        setError(undefined);
-        onChange();
-      }
-    });
-  }
-
-  return (
-    <div>
-      <h3 className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted">Comentários</h3>
-      {thread === null ? (
-        <p className="text-xs text-muted">Carregando…</p>
-      ) : (
-        <ul className="mb-3 space-y-3">
-          {thread.comments.map((c) => {
-            const author = c.author_id ? team.get(c.author_id) : undefined;
-            return (
-              <li key={c.id} className="group flex gap-2 text-sm">
-                <Avatar name={author?.name ?? "?"} url={author?.avatarUrl} size={26} />
-                <div className="min-w-0 flex-1">
-                  <p className="text-xs text-muted">
-                    <span className="font-medium text-foreground">{author?.name ?? "Usuário removido"}</span> · {when(c.created_at)}
-                    {c.author_id === me && (
-                      <button
-                        type="button"
-                        onClick={() => start(async () => (await deleteComment(c.id), onChange()))}
-                        className="ml-2 text-muted opacity-0 hover:text-danger group-hover:opacity-100"
-                      >
-                        apagar
-                      </button>
-                    )}
-                  </p>
-                  <p className="whitespace-pre-line break-words">{c.body}</p>
-                </div>
-              </li>
-            );
-          })}
-          {!thread.comments.length && <li className="text-xs text-muted">Nenhum comentário ainda.</li>}
-        </ul>
-      )}
-      <div className="flex gap-2">
+      <label className="block text-sm">
+        <span className="mb-1 block text-muted">Descrição</span>
         <textarea
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) send();
-          }}
-          rows={2}
-          placeholder="Escrever comentário (Ctrl+Enter envia)"
+          name="description"
+          rows={4}
+          defaultValue={task?.description ?? ""}
+          placeholder="O que precisa ser feito, links, detalhes…"
           className={field}
         />
-        <button
-          type="button"
-          onClick={send}
-          disabled={pending || !text.trim()}
-          aria-label="Enviar comentário"
-          className="self-end rounded-lg bg-foreground p-2.5 text-background hover:bg-foreground/85 disabled:opacity-50"
-        >
-          {pending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
-        </button>
+      </label>
+
+      <div className="text-sm">
+        <span className="mb-1 block text-muted">
+          Subtarefas{checklist.length > 0 && ` · ${doneCount}/${checklist.length} concluídas`}
+        </span>
+        {checklist.length > 0 && (
+          <div className="mb-2 h-1.5 overflow-hidden rounded-full bg-sand">
+            <div className="h-full rounded-full bg-[var(--series-1)] transition-all" style={{ width: `${(doneCount / checklist.length) * 100}%` }} />
+          </div>
+        )}
+        <ul className="space-y-0.5">
+          {checklist.map((item, i) => (
+            <li key={i} className="group flex items-center gap-2 rounded-lg px-1 py-1 hover:bg-surface">
+              <input
+                type="checkbox"
+                checked={item.done}
+                onChange={() => {
+                  setChecklist((c) => c.map((x, j) => (j === i ? { ...x, done: !x.done } : x)));
+                  // tarefa existente: grava na hora (e desfaz na tela se falhar)
+                  if (task)
+                    startToggle(async () => {
+                      const res = await toggleChecklistItem(task.id, i);
+                      if (res?.error) {
+                        setChecklist((c) => c.map((x, j) => (j === i ? { ...x, done: !x.done } : x)));
+                        setError(res.error);
+                      }
+                    });
+                }}
+                className="size-4 accent-[var(--accent)]"
+                aria-label={`Concluir: ${item.text}`}
+              />
+              <span className={`flex-1 ${item.done ? "text-muted line-through" : ""}`}>{item.text}</span>
+              <button
+                type="button"
+                onClick={() => setChecklist((c) => c.filter((_, j) => j !== i))}
+                aria-label="Remover subtarefa"
+                className="rounded p-1 text-muted opacity-0 hover:text-danger group-hover:opacity-100"
+              >
+                <X className="size-3.5" />
+              </button>
+            </li>
+          ))}
+        </ul>
+        <div className="mt-1 flex gap-2">
+          <input
+            value={newItem}
+            onChange={(e) => setNewItem(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                addItem();
+              }
+            }}
+            placeholder="Adicionar subtarefa e apertar Enter"
+            className={field}
+          />
+          <button type="button" onClick={addItem} aria-label="Adicionar subtarefa" className="rounded-lg border border-border px-2.5 hover:bg-sand">
+            <Plus className="size-4" />
+          </button>
+        </div>
       </div>
-      {error && <p className="mt-1 text-xs text-danger">{error}</p>}
-    </div>
+
+      {!task && (
+        <label className="block text-sm">
+          <span className="mb-1 block text-muted">Comentário</span>
+          <textarea name="comment" rows={2} placeholder="Observação inicial para a equipe (opcional)" className={field} />
+          <span className="mt-1 block text-xs text-muted">Arquivos podem ser anexados depois, na aba Comentários e anexos.</span>
+        </label>
+      )}
+
+      {(state?.error || error) && <p className="rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger">{state?.error ?? error}</p>}
+      {state?.ok && task && <p className="text-sm text-accent">Alterações salvas.</p>}
+
+      <div className="flex items-center justify-between gap-3 pt-1">
+        {canDelete ? (
+          <button
+            type="button"
+            disabled={deleting}
+            onClick={() => {
+              if (!confirm("Excluir esta tarefa? Comentários, anexos e histórico também serão apagados.")) return;
+              startDelete(async () => {
+                const res = await deleteTask(task!.id);
+                if (res.error) setError(res.error);
+                else onDeleted?.();
+              });
+            }}
+            className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm text-danger hover:bg-danger/10"
+          >
+            <Trash2 className="size-4" />
+            Excluir tarefa
+          </button>
+        ) : (
+          <span />
+        )}
+        <div className="flex gap-2">
+          <button type="button" onClick={onCancel} className="rounded-lg px-4 py-2 text-sm hover:bg-sand">
+            {task ? "Fechar" : "Cancelar"}
+          </button>
+          <button
+            disabled={pending}
+            className="flex items-center gap-2 rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background hover:bg-foreground/85 disabled:opacity-60"
+          >
+            {pending && <Loader2 className="size-4 animate-spin" />}
+            {task ? "Salvar alterações" : "Criar tarefa"}
+          </button>
+        </div>
+      </div>
+    </form>
   );
 }

@@ -17,7 +17,7 @@ export const channelLabel = (value: string) => CHANNELS.find((c) => c.value === 
 export function slugify(value: string) {
   return value
     .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
+    .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")

@@ -2,11 +2,12 @@
 
 import { useEffect, useMemo, useOptimistic, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, CalendarDays, CheckSquare, MessageSquare, Plus, Search } from "lucide-react";
+import { AlertTriangle, CalendarDays, CheckSquare, MessageSquare, Paperclip, Plus, Search } from "lucide-react";
 import { Avatar } from "@/components/avatar";
 import { createClient } from "@/lib/supabase/client";
 import {
   CATEGORIES,
+  dueRelative,
   dueState,
   formatDue,
   priorityOf,
@@ -255,6 +256,7 @@ function TaskCard({ task, assignee, onOpen }: { task: Task; assignee?: TeamMembe
   const prio = priorityOf(task.priority);
   const done = task.checklist.filter((i) => i.done).length;
   const closed = task.status === "concluido" || task.status === "cancelado";
+  const relative = dueRelative(task);
 
   return (
     <li
@@ -275,33 +277,47 @@ function TaskCard({ task, assignee, onOpen }: { task: Task; assignee?: TeamMembe
       </div>
       <p className={`font-medium leading-snug ${task.status === "cancelado" ? "line-through" : ""}`}>{task.title}</p>
 
-      <div className="mt-2.5 flex items-center justify-between gap-2">
+      {/* Vencimento: data em que a tarefa deve estar concluída */}
+      {task.due_date && (
+        <div className="mt-3">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted">Vencimento</p>
+          <p
+            className={`mt-0.5 flex flex-wrap items-center gap-x-1.5 text-xs ${
+              due === "atrasada" ? "font-medium text-danger" : due === "hoje" || due === "proxima" ? "text-[#8a5a00]" : "text-foreground"
+            }`}
+          >
+            {due === "atrasada" ? <AlertTriangle className="size-3.5" /> : <CalendarDays className="size-3.5" />}
+            <span className="tabular-nums">{formatDue(task.due_date)}</span>
+            {relative && <span className={due ? "" : "text-muted"}>· {relative}</span>}
+          </p>
+        </div>
+      )}
+
+      <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-border pt-2.5">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
-          {task.due_date && (
-            <span
-              className={`flex items-center gap-1 ${
-                due === "atrasada" ? "font-medium text-danger" : due === "hoje" || due === "proxima" ? "text-[#8a5a00]" : ""
-              }`}
-            >
-              {due === "atrasada" ? <AlertTriangle className="size-3" /> : <CalendarDays className="size-3" />}
-              {due === "hoje" ? "Hoje" : formatDue(task.due_date)}
-            </span>
-          )}
           {task.checklist.length > 0 && (
-            <span className="flex items-center gap-1">
+            <span className="flex items-center gap-1" title="Subtarefas concluídas">
               <CheckSquare className="size-3" />
               {done}/{task.checklist.length}
             </span>
           )}
           {task.comments > 0 && (
-            <span className="flex items-center gap-1">
+            <span className="flex items-center gap-1" title="Comentários">
               <MessageSquare className="size-3" />
               {task.comments}
             </span>
           )}
+          {task.attachments > 0 && (
+            <span className="flex items-center gap-1" title="Anexos">
+              <Paperclip className="size-3" />
+              {task.attachments}
+            </span>
+          )}
+          {!task.checklist.length && !task.comments && !task.attachments && <span>{priorityOf(task.priority).label}</span>}
         </div>
         {assignee ? (
-          <span title={assignee.name}>
+          <span className="flex items-center gap-1.5 text-xs text-muted" title={`Responsável: ${assignee.name}`}>
+            <span className="max-w-24 truncate">{assignee.name.split(" ")[0]}</span>
             <Avatar name={assignee.name} url={assignee.avatarUrl} size={24} />
           </span>
         ) : (

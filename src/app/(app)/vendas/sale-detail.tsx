@@ -94,7 +94,9 @@ function SaleDialog({ transaction, onClose }: { transaction: string; onClose: ()
   const [current, setCurrent] = useState(transaction);
   const [pending, start] = useTransition();
 
-  useEffect(() => ref.current?.showModal(), []);
+  useEffect(() => {
+    ref.current?.showModal();
+  }, []);
   useEffect(() => {
     start(async () => setDetail(await getSaleDetail(current)));
   }, [current]);

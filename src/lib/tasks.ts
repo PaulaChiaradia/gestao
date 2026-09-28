@@ -33,6 +33,7 @@ export type Task = {
   completed_at: string | null;
   created_at: string;
   comments: number;
+  attachments: number;
 };
 
 export type TeamMember = { id: string; name: string; avatarUrl: string | null; active?: boolean };
@@ -56,3 +57,19 @@ export function dueState(task: Pick<Task, "due_date" | "status">): "atrasada" | 
 }
 
 export const formatDue = (d: string | null) => (d ? new Date(`${d}T12:00:00`).toLocaleDateString("pt-BR") : null);
+
+/** Dias até o vencimento (negativo = atrasada), contando no fuso de São Paulo. */
+export function daysUntil(due: string) {
+  const today = Date.parse(`${todayISO()}T12:00:00`);
+  return Math.round((Date.parse(`${due}T12:00:00`) - today) / 86_400_000);
+}
+
+/** Texto curto da situação do vencimento de uma tarefa aberta. */
+export function dueRelative(task: Pick<Task, "due_date" | "status">) {
+  if (!task.due_date || task.status === "concluido" || task.status === "cancelado") return null;
+  const d = daysUntil(task.due_date);
+  if (d < 0) return `atrasada há ${-d} ${d === -1 ? "dia" : "dias"}`;
+  if (d === 0) return "vence hoje";
+  if (d === 1) return "vence amanhã";
+  return `vence em ${d} dias`;
+}

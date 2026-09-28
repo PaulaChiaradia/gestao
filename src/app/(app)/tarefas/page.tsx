@@ -11,7 +11,7 @@ export default async function TarefasPage() {
   const supabase = await createClient();
 
   const [{ data: tasks }, { data: people }] = await Promise.all([
-    supabase.from("tasks").select("*, task_comments(count)").order("due_date", { ascending: true, nullsFirst: false }).order("created_at"),
+    supabase.from("tasks").select("*, task_comments(count), task_attachments(count)").order("due_date", { ascending: true, nullsFirst: false }).order("created_at"),
     supabase.from("profiles").select("id, full_name, email, avatar_url, active").order("full_name"),
   ]);
 
@@ -26,6 +26,7 @@ export default async function TarefasPage() {
     ...t,
     checklist: t.checklist ?? [],
     comments: (t.task_comments as { count: number }[] | undefined)?.[0]?.count ?? 0,
+    attachments: (t.task_attachments as { count: number }[] | undefined)?.[0]?.count ?? 0,
   }));
 
   return (
